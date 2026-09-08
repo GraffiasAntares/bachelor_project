@@ -1,0 +1,4 @@
+src/bachelor_project/data/raw/open_meteo_train.csv
+.dvc/
+.DS_Store
+.venv/
