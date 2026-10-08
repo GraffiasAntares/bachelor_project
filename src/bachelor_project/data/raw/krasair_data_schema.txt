@@ -1,0 +1,20 @@
+{
+    'status' : {
+        'code': int,
+        'message': str
+    },
+    'data': [
+        {
+            'time': str, 
+            'site': int64, 
+            'aqi': int64, 
+            'iaqi': int64, 
+            'pm25': float64, 
+            'pm10': float64, 
+            'pm25_mcp': float64,
+            't': float64,
+            'p': float64,
+            'h': float64
+        }
+    ]
+}
