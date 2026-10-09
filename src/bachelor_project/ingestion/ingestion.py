@@ -1,3 +1,5 @@
+from bachelor_project import config
+
 import argparse
 import requests
 from pathlib import Path
@@ -34,25 +36,10 @@ def get_pm25_daily_data(date):
         raise Exception('Status is not ok')
 
     df = pd.DataFrame(req['data'])
-    df['time'] = pd.to_datetime(df['time'])
-    df_date = pd.DataFrame({'time': pd.date_range(time_begin,time_end,freq='1h',inclusive='left')})
-    groups = []
-    for site, group in df.groupby('site'):
-        sub = pd.merge(group, df_date, on='time', how='right')
-        sub ['site'] = [site for _ in range(sub.shape[0])]
-        groups.append(sub)
     
-    df = pd.concat(groups)
-    df = df.rename(columns={'time': 'date'})
-    
-    df["date"] = (
-        pd.to_datetime(df["date"])
-        .dt.tz_localize("Asia/Krasnoyarsk")
-        .dt.tz_convert("UTC")
-    )
-    
-    return df[['date','site','pm25']].sort_values(by=['date','site']).reset_index(drop=True)
+    return df
 
+# [start_date ; end_date)
 def get_pm25_data(start_date, end_date, progress=False):
     start_date = date(*map(int,start_date.split('-')))
     end_date = date(*map(int,end_date.split('-')))
@@ -67,13 +54,14 @@ def get_pm25_data(start_date, end_date, progress=False):
         data.append(daily)
         start_date += timedelta(1)
 
-    return pd.concat(data).reset_index(drop=True)
+    return pd.concat(data).reset_index(drop=True).sort_values(['time','site'])
 
 
 # ----------------------------------------------------------
 # Импорт данных погоды
 # ----------------------------------------------------------
 
+# [start_date ; end_date]
 def get_historical_weather_data(
         start_date: str, # "YYYY-MM-DD"
         end_date: str    # "YYYY-MM-DD"
@@ -123,7 +111,7 @@ def get_historical_weather_data(
     hourly = response.Hourly()
 
     hourly_data = {
-        "date": pd.date_range(
+        "time": pd.date_range(
             start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
     		end =  pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
     		freq = pd.Timedelta(seconds = hourly.Interval()),
@@ -133,22 +121,8 @@ def get_historical_weather_data(
     for i, col in enumerate(data_columns):
         hourly_data[col] = hourly.Variables(i).ValuesAsNumpy()
         
-    hourly_dataframe = pd.DataFrame(data = hourly_data)
-    df_date = pd.DataFrame({'date': pd.date_range(start_date,end_date,freq='1h',inclusive='left')})
-    df_date['date'] = pd.to_datetime(df_date['date'], utc=True)
-
-    df = pd.merge(hourly_dataframe, df_date,on='date', how='right')
+    df = pd.DataFrame(data = hourly_data)
     
-    return df
-
-
-# ----------------------------------------------------------
-# Объединение данных
-# ----------------------------------------------------------
-
-def merge_2data_frames(df1, df2):
-    df = pd.merge(df1, df2, on='date')
-    df['date'] = pd.to_datetime(df['date']).dt.tz_convert('Asia/Krasnoyarsk')
     return df
 
 
@@ -164,34 +138,38 @@ def create_meta(timestamp, start_date, end_date):
 # Пайплайн загрузки
 # ----------------------------------------------------------
 
+# [start_date ; end_date)
 def load_data(start_date: str, #YYYY-MM-DD
               end_date: str,   #YYYY-MM-DD
-              path: str):
+              p_path: str,
+              m_path: str):  
     
     df_pollution = get_pm25_data(start_date, end_date)
     df_weather = get_historical_weather_data(start_date, end_date)
-    merge_2data_frames(df_pollution, df_weather).to_csv(path, index=False)
+    
+    df_pollution.to_csv(p_path, index=False)
+    df_weather.to_csv(m_path, index=False)
 
     
 def main():
     parser = argparse.ArgumentParser()
-    path = Path(__file__).resolve().parent.parent / 'data' / 'raw' / 'meteo_and_pollution.csv'
+
     parser.add_argument("start_date", help="Начало выборки")
     parser.add_argument("end_date", help="Конец выборки")    
     args = parser.parse_args()
 
-    print("Скачивание данных загрязнения...")
-    df_pollution = get_pm25_data(args.start_date, args.end_date, True)
+    print("Загрузка данных...")
 
-    print("Скачивание метео-данных...")
-    df_weather = get_historical_weather_data(args.start_date, args.end_date)
+    load_data(args.start_date, 
+              args.end_date, 
+              config.RAW_POLLUTION_DATA_DIR, 
+              config.RAW_METEO_DATA_DIR)
 
-    print("Объединение данных...")
-    df = pd.merge(df_pollution, df_weather, on='date')
-    df['date'] = pd.to_datetime(df['date']).dt.tz_convert('Asia/Krasnoyarsk')
-    
-    df.to_csv(path, index=False)
-    print("Данные сохранены в директории", path)
+    print("Данные сохранены в директориях: " \
+          ,"\n", \
+          config.RAW_POLLUTION_DATA_DIR \
+          ,"\n", \
+          config.RAW_METEO_DATA_DIR)
 
 if __name__=='__main__':
     main()

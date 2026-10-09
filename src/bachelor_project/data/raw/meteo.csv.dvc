@@ -1,0 +1,5 @@
+outs:
+- md5: b4a4d7831c872556766d8694cb259c79
+  size: 5648689
+  hash: md5
+  path: meteo.csv
