@@ -25,6 +25,8 @@ dependencies = [
 [project.scripts]
 bachelor-project = "bachelor_project:main"
 load-data = "bachelor_project.ingestion.ingestion:main"
+get-features = "bachelor_project.feature_engineering.feature_engineering:main"
+split-data = "bachelor_project.splitting.split_and_standardization:main"
 test-load-data = "bachelor_project.ingestion.test:main"
 
 [build-system]
