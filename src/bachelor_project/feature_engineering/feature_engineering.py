@@ -1,4 +1,4 @@
-from bachelor_project import config
+from bachelor_project.configs import dir_config
 
 import pandas as pd
 import numpy as np
@@ -125,7 +125,7 @@ def add_rolling_features(df):
 
 
 def get_features_and_save():
-    ext_df = pd.read_csv(config.PREP_K_DATA_DIR)
+    ext_df = pd.read_csv(dir_config.PREP_K_DATA_DIR)
     ext_df['time'] = pd.to_datetime(ext_df['time'])
     ext_df = ext_df.set_index('time')
 
@@ -133,7 +133,7 @@ def get_features_and_save():
     ext_df = add_rolling_features(ext_df)
     
     ext_df = ext_df.reset_index()
-    ext_df.to_csv(config.FEATURES_DATA_DIR, index=False)
+    ext_df.to_csv(dir_config.FEATURES_DATA_DIR, index=False)
     
 
 def main():

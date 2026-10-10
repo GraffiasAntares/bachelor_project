@@ -27,6 +27,8 @@ bachelor-project = "bachelor_project:main"
 load-data = "bachelor_project.ingestion.ingestion:main"
 get-features = "bachelor_project.feature_engineering.feature_engineering:main"
 split-data = "bachelor_project.splitting.split_and_standardization:main"
+feature-engineering = "bachelor_project.feature_engineering.feature_engineering:main"
+feature-selection = "bachelor_project.training.feature_selection:main"
 test-load-data = "bachelor_project.ingestion.test:main"
 
 [build-system]

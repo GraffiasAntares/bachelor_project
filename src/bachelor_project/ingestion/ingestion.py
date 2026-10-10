@@ -1,4 +1,4 @@
-from bachelor_project import config
+from bachelor_project.configs import dir_config
 
 import argparse
 import requests
@@ -162,14 +162,14 @@ def main():
 
     load_data(args.start_date, 
               args.end_date, 
-              config.RAW_POLLUTION_DATA_DIR, 
-              config.RAW_METEO_DATA_DIR)
+              dir_config.RAW_POLLUTION_DATA_DIR, 
+              dir_config.RAW_METEO_DATA_DIR)
 
     print("Данные сохранены в директориях: " \
           ,"\n", \
-          config.RAW_POLLUTION_DATA_DIR \
+          dir_config.RAW_POLLUTION_DATA_DIR \
           ,"\n", \
-          config.RAW_METEO_DATA_DIR)
+          dir_config.RAW_METEO_DATA_DIR)
 
 
 if __name__=='__main__':

@@ -1,6 +1,7 @@
 from pathlib import Path
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR = PROJECT_DIR / "src" / "bachelor_project" / "data" 
 MODEL_DIR = PROJECT_DIR / "src" / "bachelor_project" / "model" 
 
@@ -21,12 +22,4 @@ TEST_DATA = DATA_DIR / "test" / "test.csv"
 TEST_RAW_POLLUTION_DATA_DIR = DATA_DIR / "raw" / "test_pollution.csv"
 TEST_RAW_METEO_DATA_DIR = DATA_DIR / "raw" / "test_meteo.csv"
 
-
-if __name__=="__main__":
-    print("PROJECT_DIR:", PROJECT_DIR)
-
-    print("RAW_POLLUTION_DATA_DIR:", RAW_POLLUTION_DATA_DIR)
-    print("RAW_METEO_DATA_DIR:", RAW_METEO_DATA_DIR)
-    
-    print("TEST_RAW_POLLUTION_DATA_DIR:", TEST_RAW_POLLUTION_DATA_DIR)
-    print("TEST_RAW_METEO_DATA_DIR:", TEST_RAW_METEO_DATA_DIR)
+FEATURES_IMPORTANCE_DIR = MODEL_DIR / "features_importance.png"
