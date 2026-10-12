@@ -1,10 +1,11 @@
 __pycache__
 .dvc/
-.DS_Store
 .venv/
 mlruns/
 mlartifacts/
 mlflow.db
+draft.ipynb
+.DS_Store
 *.csv
 .*
 !.gitignore
