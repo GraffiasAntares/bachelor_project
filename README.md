@@ -142,7 +142,3 @@ uv run mlflow server --host 127.0.0.1 --port 5000
 ## Стек
 
 Python 3.12 · pandas · NumPy · scikit-learn · PyTorch · PyKAN · MLflow · DVC · uv · Matplotlib / Seaborn · Open-Meteo API
-
-## Автор
-
-GraffiasAntares
