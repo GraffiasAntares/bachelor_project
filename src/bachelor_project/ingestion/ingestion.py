@@ -160,11 +160,12 @@ def main():
 
     print("Загрузка данных...")
 
-    load_data(args.start_date, 
-              args.end_date, 
-              dir_config.RAW_POLLUTION_DATA_DIR, 
-              dir_config.RAW_METEO_DATA_DIR)
+    df_pollution = get_pm25_data(args.start_date, args.end_date, True)
+    df_weather = get_historical_weather_data(args.start_date, args.end_date)
 
+    df_pollution.to_csv(dir_config.RAW_POLLUTION_DATA_DIR, index=False)
+    df_weather.to_csv(dir_config.RAW_METEO_DATA_DIR, index=False)
+    
     print("Данные сохранены в директориях: " \
           ,"\n", \
           dir_config.RAW_POLLUTION_DATA_DIR \

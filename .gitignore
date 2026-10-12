@@ -2,6 +2,9 @@ __pycache__
 .dvc/
 .DS_Store
 .venv/
+mlruns/
+mlartifacts/
+mlflow.db
 *.csv
 .*
 !.gitignore

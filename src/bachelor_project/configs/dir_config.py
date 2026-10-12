@@ -4,6 +4,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent.parent
 DATA_DIR = PROJECT_DIR / "src" / "bachelor_project" / "data" 
 MODEL_DIR = PROJECT_DIR / "src" / "bachelor_project" / "model" 
+ARTIFACTS_DIR = PROJECT_DIR / "src" / "bachelor_project" / "artifacts" 
 
 RAW_POLLUTION_DATA_DIR = DATA_DIR / "raw" / "pollution.csv"
 RAW_METEO_DATA_DIR = DATA_DIR / "raw" / "meteo.csv"
@@ -22,4 +23,5 @@ TEST_DATA = DATA_DIR / "test" / "test.csv"
 TEST_RAW_POLLUTION_DATA_DIR = DATA_DIR / "raw" / "test_pollution.csv"
 TEST_RAW_METEO_DATA_DIR = DATA_DIR / "raw" / "test_meteo.csv"
 
+FEATURE_SELECTION_ARTIFACTS_DIR = ARTIFACTS_DIR / "feature_selection" / "selected_features.json"
 FEATURES_IMPORTANCE_DIR = MODEL_DIR / "features_importance.png"

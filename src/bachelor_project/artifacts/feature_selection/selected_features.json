@@ -1,0 +1,12 @@
+{
+    "features": [
+        "temperature_2m_roll24",
+        "mean_Ri",
+        "wind_speed_10m",
+        "temperature_120m_roll24",
+        "max_Ri",
+        "temperature_2m",
+        "wind_speed_80m",
+        "max_inv_roll24"
+    ]
+}

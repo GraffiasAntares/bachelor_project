@@ -9,15 +9,17 @@ SELECTED_FEATURES = [
     'wind_speed_180m'
 ]
 
-RF_PARAM_GRID = {
-        'n_estimators': [10, 50, 100, 150, 200],
-        'max_depth': [6, 10, 15, None],
-        'min_samples_leaf': [4, 8, 15],
-        'max_features': ['sqrt', 'log2', 0.25, 0.4]
-    }
 # RF_PARAM_GRID = {
-#         'n_estimators': [10],
-#         'max_depth': [6],
-#         'min_samples_leaf': [4],
-#         'max_features': ['sqrt', 'log2', 0.25, 0.4]
+#         'n_estimators': [10, 50, 100, 200],
+#         'max_depth': [6, 10, 15],
+#         'min_samples_leaf': [4, 8, 15],
+#         'max_features': ['sqrt', 'log2', 0.25, 0.4],
+#         'random_state': [42]
 #     }
+RF_PARAM_GRID = {
+        'n_estimators': [10],
+        'max_depth': [6],
+        'min_samples_leaf': [4],
+        'max_features': ['sqrt', 'log2', 0.25, 0.4],
+        'random_state': [42]
+    }

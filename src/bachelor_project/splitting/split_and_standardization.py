@@ -13,15 +13,11 @@ def split(df):
     return train, val, test
 
 
-def fit_transform(df):
+def fit(df):
     scaler = StandardScaler()
-    index = df.index
-    transformed = scaler.fit_transform(df.drop(['K'],axis=1).values)
-    transformed = pd.DataFrame(data=transformed,columns=df.drop(['K'],axis=1).columns,index=index)
-
+    scaler.fit(df.drop(['K'],axis=1).values)
     joblib.dump(scaler, dir_config.SCALER_DIR)
-    return transformed.join(df[['K']])
-
+    
 
 def transform(df):
     scaler = joblib.load(dir_config.SCALER_DIR)
@@ -38,8 +34,10 @@ def main():
     df['time'] = pd.to_datetime(df['time'])
     df = df.set_index('time')
     
-    df = fit_transform(df)
     train, val, test = split(df)
+
+    fit(train)
+    train, val, test = transform(train), transform(val), transform(test)
 
     train.reset_index().to_csv(dir_config.TRAIN_DATA, index=False)
     val.reset_index().to_csv(dir_config.VAL_DATA, index=False)

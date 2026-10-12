@@ -4,14 +4,16 @@ from bachelor_project.configs import dir_config
 import itertools
 
 import mlflow
+import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 from sklearn.inspection import permutation_importance
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 
 from tqdm import tqdm
 
@@ -40,69 +42,89 @@ def cross_validation(run_name, estimator, features, target):
 
 def cv_tuning_model(estimator, grid, features, target):
     with mlflow.start_run(run_name="tuning", nested=True):
-        param_grid = model_config.RF_PARAM_GRID
-        keys, values = zip(*param_grid.items())
-        grid = [dict(zip(keys, v)) for v in itertools.product(*values)]
 
         # Прогоны с разными гиперпараметрами
-        raiting = []
-        for no, params in enumerate(grid):
-            _, _, val_r2 = cross_validation(run_name=f'RF_p{no+1}',
-                                            estimator=estimator.set_params(**params),
-                                            features=features.values,
-                                            target=target.values)
-            raiting.append(val_r2)
+        tscv = TimeSeriesSplit(n_splits=5)
+        tuning = RandomizedSearchCV(estimator=estimator,
+                                    param_distributions=grid,
+                                    n_iter=100,
+                                    cv=tscv,
+                                    refit=True,
+                                    scoring='r2')
+        tuning.fit(features, target)
 
-        best_idx = np.argmax(raiting)
-        best_score = raiting[best_idx]
-        best_params = grid[best_idx]
-        best_estimator = RandomForestRegressor(**best_params)
-        best_estimator.fit(features, target)
-        
-        mlflow.sklearn.log_model(sk_model=best_estimator, 
-                                 name='best_model',
-                                 skops_trusted_types=["sklearn.tree._tree.Tree"])
-        mlflow.log_metric('best_validation_r2', best_score)
-        mlflow.log_params(best_estimator.get_params())
-
-        return best_estimator, best_params
+        return tuning.best_estimator_, tuning.best_params_
 
 
-def iterative_train(model, X_train, y_train, X_val, y_val, features_order, iters=20):
+def iterative_train(model, features, target, features_order, iters=None):
+    if not iters: iters = len(features)
     metrics = {
         'num_of_features': [*range(1,iters+1)],
-        'training_r2': [],
-        'validation_r2': []
+        'training_r2': []
     }
     with mlflow.start_run(run_name="simplification", nested=True):
         # Прогоны с разным количеством признаков
         for feat_i in metrics['num_of_features']:
             with mlflow.start_run(run_name=f'RF_f{feat_i}', nested=True):
                 feats = features_order[:feat_i]
-                model.fit(X_train[feats],y_train)
+                model.fit(features[feats],target)
 
-                train_pred = model.predict(X_train[feats])
-                val_pred = model.predict(X_val[feats])
+                pred = model.predict(features[feats])
                 
-                train_r2 = r2_score(y_train, train_pred)
-                val_r2 = r2_score(y_val, val_pred)
+                train_r2 = r2_score(target, pred)            
 
                 mlflow.log_params(params=model.get_params())
                 mlflow.log_param(key="num_of_features", value=feat_i)
                 mlflow.log_metric(key="training_r2", value=train_r2)
-                mlflow.log_metric(key="validation_r2", value=val_r2)
 
                 metrics['training_r2'].append(train_r2)
-                metrics['validation_r2'].append(val_r2)
 
     return metrics
+
+
+def save_selected_features(features, save_path):
+    path = Path(save_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(
+            {"features": features},
+            file,
+            ensure_ascii=False,
+            indent=4,
+        )
+
+
+def save_feature_importance_graph(verification_df, iterative_metrics, save_path):
+    fig, axes = plt.subplots(
+        nrows=1,
+        ncols=2,
+        figsize=(15, 9),
+        layout="constrained",
+    )
+
+    ax_im, ax_pi= axes.flat
+
+    ax_im.plot(iterative_metrics['num_of_features'], iterative_metrics['training_r2'], 'o-', label='train')
+    ax_im.set_xlabel('Количество признаков')
+    ax_im.set_ylabel('R2')
+    ax_im.set_title('R2 от количества признаков')
+    ax_im.set_xticks(iterative_metrics['num_of_features'][::1])
+    ax_im.legend()
+    ax_im.grid()
+
+    ax_pi.barh(verification_df['Feature'].iloc[:10][::-1],verification_df['Importance'].iloc[:10][::-1])
+    ax_pi.set_title('Топ 10 признаков по важности')
+    ax_pi.set_xlabel('Важность признаков')
+
+    fig.savefig(save_path)
 
 
 def run_selection():
 
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     mlflow.set_experiment("feature_selection_by_random_forest")
-    # mlflow.sklearn.autolog(max_tuning_runs=10)
+    mlflow.sklearn.autolog(max_tuning_runs=10)
     
     train = pd.read_csv(dir_config.TRAIN_DATA).set_index('time')
     val = pd.read_csv(dir_config.VAL_DATA).set_index('time')
@@ -115,7 +137,7 @@ def run_selection():
                                     training_dataset[features], training_dataset[target])
     
     result = permutation_importance(
-        model, val[features], val[target], 
+        model, training_dataset[features], training_dataset[target], 
         scoring='r2', 
         n_repeats=10, 
         random_state=42, 
@@ -130,35 +152,21 @@ def run_selection():
     }).sort_values(by='Importance', ascending=False)
 
     iterative_metrics = iterative_train(RandomForestRegressor(**params),
-                              train[features],train[target],
-                              val[features],val[target],
+                              training_dataset[features], 
+                              training_dataset[target],
                               features_order=verification_df['Feature'].values,
                               iters=20)
 
-    fig, axes = plt.subplots(
-        nrows=1,
-        ncols=2,
-        figsize=(15, 9),
-        layout="constrained",
-    )
-    ax_im, ax_pi= axes.flat
+    for num_of_features, metric_value in enumerate(iterative_metrics['training_r2']):
+        if metric_value / iterative_metrics['training_r2'][-1] >= 0.95:
+            num_of_features += 1
+            break
+    
+    selected_features = list(verification_df['Feature'].values[:num_of_features])
 
-    ax_im.plot(iterative_metrics['num_of_features'], iterative_metrics['training_r2'], 'o-', label='train')
-    ax_im.plot(iterative_metrics['num_of_features'], iterative_metrics['validation_r2'], 'o-', label='val')
-    ax_im.set_xlabel('Количество признаков')
-    ax_im.set_ylabel('R2')
-    ax_im.set_title('R2 от количества признаков')
-    ax_im.set_xticks(iterative_metrics['num_of_features'][::1])
-    ax_im.legend()
-    ax_im.grid()
+    save_selected_features(selected_features, dir_config.FEATURE_SELECTION_ARTIFACTS_DIR)
+    save_feature_importance_graph(verification_df, iterative_metrics, dir_config.FEATURES_IMPORTANCE_DIR)
 
-    ax_pi.barh(verification_df['Feature'].iloc[:10][::-1],verification_df['Importance'].iloc[:10][::-1])
-    ax_pi.set_title('Топ 10 признаков по важности')
-    ax_pi.set_xlabel('Важность признаков')
-
-    fig.savefig(dir_config.FEATURES_IMPORTANCE_DIR)
-
-    plt.show()
 
 def main():
     run_selection()
