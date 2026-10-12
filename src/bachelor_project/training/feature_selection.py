@@ -3,90 +3,137 @@ from bachelor_project.configs import dir_config
 
 import itertools
 
+import mlflow
 import pandas as pd
-import seaborn as sns
+import numpy as np
 import matplotlib.pyplot as plt
 
-from tqdm import tqdm
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 from sklearn.inspection import permutation_importance
+from sklearn.model_selection import TimeSeriesSplit
+
+from tqdm import tqdm
+
+
+def cross_validation(run_name, estimator, features, target):
+    tscv = TimeSeriesSplit(n_splits=5)
+    with mlflow.start_run(run_name=run_name, nested=True):
+        mean_training_r2 = 0
+        mean_validation_r2 = 0
+        for train_idxs, val_idxs in tscv.split(features):
+            estimator.fit(features[train_idxs], target[train_idxs])
+            train_pred = estimator.predict(features[train_idxs])
+            val_pred = estimator.predict(features[val_idxs])
+            train_r2 = r2_score(target[train_idxs], train_pred)
+            val_r2 = r2_score(target[val_idxs], val_pred)
+
+            mean_training_r2 += train_r2 / tscv.get_n_splits()
+            mean_validation_r2 += val_r2 / tscv.get_n_splits()
+
+        mlflow.log_params(estimator.get_params())
+        mlflow.log_metric('training_r2', mean_training_r2)
+        mlflow.log_metric('validation_r2', mean_validation_r2)
+    
+    return estimator, mean_training_r2, mean_validation_r2
+
+
+def cv_tuning_model(estimator, grid, features, target):
+    with mlflow.start_run(run_name="tuning", nested=True):
+        param_grid = model_config.RF_PARAM_GRID
+        keys, values = zip(*param_grid.items())
+        grid = [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+        # Прогоны с разными гиперпараметрами
+        raiting = []
+        for no, params in enumerate(grid):
+            _, _, val_r2 = cross_validation(run_name=f'RF_p{no+1}',
+                                            estimator=estimator.set_params(**params),
+                                            features=features.values,
+                                            target=target.values)
+            raiting.append(val_r2)
+
+        best_idx = np.argmax(raiting)
+        best_score = raiting[best_idx]
+        best_params = grid[best_idx]
+        best_estimator = RandomForestRegressor(**best_params)
+        best_estimator.fit(features, target)
+        
+        mlflow.sklearn.log_model(sk_model=best_estimator, 
+                                 name='best_model',
+                                 skops_trusted_types=["sklearn.tree._tree.Tree"])
+        mlflow.log_metric('best_validation_r2', best_score)
+        mlflow.log_params(best_estimator.get_params())
+
+        return best_estimator, best_params
+
+
+def iterative_train(model, X_train, y_train, X_val, y_val, features_order, iters=20):
+    metrics = {
+        'num_of_features': [*range(1,iters+1)],
+        'training_r2': [],
+        'validation_r2': []
+    }
+    with mlflow.start_run(run_name="simplification", nested=True):
+        # Прогоны с разным количеством признаков
+        for feat_i in metrics['num_of_features']:
+            with mlflow.start_run(run_name=f'RF_f{feat_i}', nested=True):
+                feats = features_order[:feat_i]
+                model.fit(X_train[feats],y_train)
+
+                train_pred = model.predict(X_train[feats])
+                val_pred = model.predict(X_val[feats])
+                
+                train_r2 = r2_score(y_train, train_pred)
+                val_r2 = r2_score(y_val, val_pred)
+
+                mlflow.log_params(params=model.get_params())
+                mlflow.log_param(key="num_of_features", value=feat_i)
+                mlflow.log_metric(key="training_r2", value=train_r2)
+                mlflow.log_metric(key="validation_r2", value=val_r2)
+
+                metrics['training_r2'].append(train_r2)
+                metrics['validation_r2'].append(val_r2)
+
+    return metrics
 
 
 def run_selection():
-    X_train = pd.read_csv(dir_config.TRAIN_DATA).set_index('time').drop([model_config.TARGET],axis=1)
-    y_train = pd.read_csv(dir_config.TRAIN_DATA).set_index('time')[model_config.TARGET]
 
-    X_val = pd.read_csv(dir_config.VAL_DATA).set_index('time').drop([model_config.TARGET],axis=1)
-    y_val = pd.read_csv(dir_config.VAL_DATA).set_index('time')[model_config.TARGET]
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_experiment("feature_selection_by_random_forest")
+    # mlflow.sklearn.autolog(max_tuning_runs=10)
+    
+    train = pd.read_csv(dir_config.TRAIN_DATA).set_index('time')
+    val = pd.read_csv(dir_config.VAL_DATA).set_index('time')
+    training_dataset = pd.concat([train, val])
 
-    param_grid = model_config.RF_PARAM_GRID
-    keys, values = zip(*param_grid.items())
-    experiments = [dict(zip(keys, v)) for v in itertools.product(*values)]
+    target = model_config.TARGET
+    features = training_dataset.drop([target],axis=1).columns
     
-    best_r2_val = -float('inf')
-    best_params = None
-    results_history = []
+    model, params = cv_tuning_model(RandomForestRegressor(), model_config.RF_PARAM_GRID,
+                                    training_dataset[features], training_dataset[target])
     
-    print(f"Запуск перебора {len(experiments)} комбинаций...")
-    
-    for params in tqdm(experiments):
-        rf = RandomForestRegressor(**params, random_state=42, n_jobs=-1)
-        
-        rf.fit(X_train, y_train)
-        
-        preds_train = rf.predict(X_train)
-        preds_val = rf.predict(X_val)
-        
-        r2_train = r2_score(y_train, preds_train)
-        r2_val = r2_score(y_val, preds_val)
-        
-        results_history.append({
-            'params': params,
-            'r2_train': r2_train,
-            'r2_val': r2_val,
-            'gap': r2_train - r2_val
-        })
-        
-        if r2_val > best_r2_val:
-            best_r2_val = r2_val
-            best_params = params
-    
-    print("\n=== ОПТИМИЗАЦИЯ ЗАВЕРШЕНА ===")
-    print(f"Лучшие параметры: {best_params}")
-    print(f"Максимальный R2 на Валидации: {best_r2_val:.4f}")
-
-    best_rf = RandomForestRegressor(**best_params, random_state=42, n_jobs=-1)
-    best_rf.fit(X_train, y_train)
-
     result = permutation_importance(
-        best_rf, X_train, y_train, 
+        model, val[features], val[target], 
         scoring='r2', 
         n_repeats=10, 
         random_state=42, 
         n_jobs=-1
     )
 
-    rf_r2 = []
-    feat_num = []
-    
     # Формируем итоговый топ
     verification_df = pd.DataFrame({
-        'Feature': X_train.columns,
-        'Importance_Mean': result.importances_mean,
+        'Feature': features,
+        'Importance': result.importances_mean,
         'Importance_Std': result.importances_std
-    }).sort_values(by='Importance_Mean', ascending=False)
+    }).sort_values(by='Importance', ascending=False)
 
-    for feat_i in range(1,21):
-        print(feat_i,end=' ')
-        model = RandomForestRegressor(**best_params)
-        feats = verification_df['Feature'].iloc[:feat_i]
-        model.fit(X_train[feats],y_train)
-        val_pred = model.predict(X_val[feats])
-        
-        rf_r2.append(r2_score(y_val,val_pred))
-        feat_num.append(feat_i)
-
+    iterative_metrics = iterative_train(RandomForestRegressor(**params),
+                              train[features],train[target],
+                              val[features],val[target],
+                              features_order=verification_df['Feature'].values,
+                              iters=20)
 
     fig, axes = plt.subplots(
         nrows=1,
@@ -94,23 +141,24 @@ def run_selection():
         figsize=(15, 9),
         layout="constrained",
     )
-    ax_rd, ax_pi= axes.flat
+    ax_im, ax_pi= axes.flat
 
-    ax_rd.plot(feat_num, rf_r2,'o-')
-    ax_pi.set_title('Значение R2 от признаков')
-    ax_rd.set_xlabel('Количество признаков')
-    ax_rd.set_ylabel('R2')
-    ax_rd.set_xticks(feat_num[::1])
-    ax_rd.grid()
+    ax_im.plot(iterative_metrics['num_of_features'], iterative_metrics['training_r2'], 'o-', label='train')
+    ax_im.plot(iterative_metrics['num_of_features'], iterative_metrics['validation_r2'], 'o-', label='val')
+    ax_im.set_xlabel('Количество признаков')
+    ax_im.set_ylabel('R2')
+    ax_im.set_title('R2 от количества признаков')
+    ax_im.set_xticks(iterative_metrics['num_of_features'][::1])
+    ax_im.legend()
+    ax_im.grid()
 
-    ax_pi.barh(verification_df['Feature'].iloc[:10][::-1],verification_df['Importance_Mean'].iloc[:10][::-1])
+    ax_pi.barh(verification_df['Feature'].iloc[:10][::-1],verification_df['Importance'].iloc[:10][::-1])
     ax_pi.set_title('Топ 10 признаков по важности')
     ax_pi.set_xlabel('Важность признаков')
 
     fig.savefig(dir_config.FEATURES_IMPORTANCE_DIR)
 
     plt.show()
-
 
 def main():
     run_selection()
