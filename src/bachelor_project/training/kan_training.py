@@ -89,34 +89,49 @@ def train():
         })
         for epoch in range(epochs):
             model.train()
+            train_loss = 0.0
+
             for X, y in training_dataset:
+
                 def closure():
                     optimizer.zero_grad()
-                    pred = model(X)
+
+                    pred = model(X).flatten()
                     loss = criterion(pred, y)
-                    reg_loss = model.reg('edge_forward_spline_n',1.0,1.0,1.0,1.0)
+                    reg_loss = model.reg(
+                        'edge_forward_spline_n',
+                        1.0, 1.0, 1.0, 1.0
+                    )
                     total_loss = loss + lambd * reg_loss
+
                     total_loss.backward()
-                    
                     return total_loss
-                
-                loss = criterion(model(X),y)
+
                 optimizer.step(closure)
-                scheduler.step(loss)
 
-                model_info = mlflow.pytorch.log_model(
-                    pytorch_model=model,
-                    name=f"checkpoint-{epoch}",
-                    step=epoch,
-                    input_example=X[:5].numpy(),
-                )
+                # Считаем loss после обновления параметров
+                with torch.no_grad():
+                    pred = model(X).flatten()
+                    loss = criterion(pred, y)
+                    train_loss += loss.item()
 
-                mlflow.log_metric(
-                    key="train_RMSE",
-                    value=loss**0.5,
-                    step=epoch,
-                    model_id=model_info.model_id,
-                )
+            train_loss /= len(training_dataset)
+            scheduler.step(train_loss)
+
+            model_info = mlflow.pytorch.log_model(
+                pytorch_model=model,
+                name=f"epoch-{epoch+1}",
+                step=epoch,
+                input_example=X[:5].numpy(),
+                serialization_format="pickle"
+            )
+
+            mlflow.log_metric(
+                key="train_RMSE",
+                value=train_loss**0.5,
+                step=epoch,
+                model_id=model_info.model_id,
+            )
 
         # return model
 
@@ -127,3 +142,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    

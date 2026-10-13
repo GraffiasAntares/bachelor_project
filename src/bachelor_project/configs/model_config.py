@@ -8,10 +8,11 @@ RF_PARAM_GRID = {
     }
 
 KAN_TRAIN_CONFIG = {
-    'epochs': 50,
+    'epochs': 5,
     'learning_rate': 1,
     'lambd': 0.001,
-    'scheduler_patience': 5
+    'scheduler_patience': 5,
+    'auto_save': False
 }
 
 KAN_PARAMS = {
