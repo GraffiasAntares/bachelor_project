@@ -23,5 +23,5 @@ TEST_DATA = DATA_DIR / "test" / "test.csv"
 TEST_RAW_POLLUTION_DATA_DIR = DATA_DIR / "raw" / "test_pollution.csv"
 TEST_RAW_METEO_DATA_DIR = DATA_DIR / "raw" / "test_meteo.csv"
 
-FEATURE_SELECTION_ARTIFACTS_DIR = ARTIFACTS_DIR / "feature_selection" / "selected_features.json"
+SELECTED_FEATURES_DIR = ARTIFACTS_DIR / "feature_selection" / "selected_features.json"
 FEATURES_IMPORTANCE_DIR = MODEL_DIR / "features_importance.png"

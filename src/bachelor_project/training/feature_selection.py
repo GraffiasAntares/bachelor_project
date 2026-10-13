@@ -120,7 +120,7 @@ def save_feature_importance_graph(verification_df, iterative_metrics, save_path)
     fig.savefig(save_path)
 
 
-def run_selection():
+def run_selection(random_state=42):
 
     mlflow.set_tracking_uri("http://127.0.0.1:5000")
     mlflow.set_experiment("feature_selection_by_random_forest")
@@ -132,6 +132,9 @@ def run_selection():
 
     target = model_config.TARGET
     features = training_dataset.drop([target],axis=1).columns
+
+    param_grid = model_config.RF_PARAM_GRID
+    param_grid['random_state'] = [random_state]
     
     model, params = cv_tuning_model(RandomForestRegressor(), model_config.RF_PARAM_GRID,
                                     training_dataset[features], training_dataset[target])
@@ -140,7 +143,7 @@ def run_selection():
         model, training_dataset[features], training_dataset[target], 
         scoring='r2', 
         n_repeats=10, 
-        random_state=42, 
+        random_state=random_state, 
         n_jobs=-1
     )
 
@@ -164,7 +167,7 @@ def run_selection():
     
     selected_features = list(verification_df['Feature'].values[:num_of_features])
 
-    save_selected_features(selected_features, dir_config.FEATURE_SELECTION_ARTIFACTS_DIR)
+    save_selected_features(selected_features, dir_config.SELECTED_FEATURES_DIR)
     save_feature_importance_graph(verification_df, iterative_metrics, dir_config.FEATURES_IMPORTANCE_DIR)
 
 
